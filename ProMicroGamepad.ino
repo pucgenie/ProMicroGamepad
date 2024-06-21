@@ -6,8 +6,9 @@
 // no TRACE_MEASURE_SKIP_SMALL
 #define SACRIFICE_CYCLES_FOR_RAM // saves about 12 bytes of RAM, 14 bytes of Program storage.
 //#define DEBUG_MY_TIMER1
-#define COMPLETELY_UNTOUCH_TIMER1
+//#define COMPLETELY_UNTOUCH_TIMER1
 #define MY_KEEP_SERIAL
+//#define MY_DISABLE_POWERSAVE
 
 // workaround, include here to prevent implicit includes (running wrong marcos)
 //#include <Arduino.h>
@@ -16,6 +17,12 @@
 #include "Joystick.h"
 #include <avr/power.h>
 #include <avr/sleep.h>
+
+
+// debugging -1
+#include <USBCore.h>
+extern volatile u8 _usbConfiguration;
+
 
 struct MappedPin {
   // pins 2 to 16: need 4 bits when using offset -2
@@ -31,7 +38,7 @@ struct MappedPin {
   ;
 };
 
-// TODO: Store first column in EEPROM
+// TODO: Store first column in EEPROM?
 static struct MappedPin MAPPED_PINS[] = {
   {2, 0},
   {3, 0},
@@ -47,8 +54,6 @@ static struct MappedPin MAPPED_PINS[] = {
   {15, 0},
 };
 
-static Joystick_ Joystick(0x03, 0x05, sizeof(MAPPED_PINS), 0, 0, 0, false);
-
 #ifdef TRACE_MEASURE
 #include "trace_measure.h"
 #endif
@@ -61,7 +66,7 @@ ISR(TIMER1_COMPA_vect) {
   static uint16_t debugLedState = 0;
   static bool debugLedNext = false;
   if (++debugLedState == 0) {
-    digitalWrite(LED_BUILTIN, debugLedNext ? HIGH : LOW);
+    digitalWrite(LED_BUILTIN_TX, debugLedNext ? HIGH : LOW);
     debugLedNext = !debugLedNext;
   }
 #endif
@@ -69,14 +74,28 @@ ISR(TIMER1_COMPA_vect) {
 #endif
 
 void setup() {
-#ifdef DEBUG_MY_TIMER1
-  pinMode(LED_BUILTIN, OUTPUT);
+#ifdef MY_KEEP_SERIAL
+  SerialUSB.begin(9600);
+  while (!SerialUSB) {
+    delay(3);
+  }
+  SerialUSB.write("ProMicroGamepad booting...\r\n");
+  SerialUSB.flush();
 #endif
+#ifdef DEBUG_MY_TIMER1
+  pinMode(LED_BUILTIN_TX, OUTPUT);
+#endif
+#ifndef MY_DISABLE_POWERSAVE
   // try to reach <200 μA
   power_spi_disable();
   power_twi_disable();
   ADCSRA = 0;
   power_adc_disable();
+#endif
+#ifdef MY_KEEP_SERIAL
+  SerialUSB.write("...power consumption optimized...\r\n");
+  SerialUSB.flush();
+#endif
 
 #ifndef COMPLETELY_UNTOUCH_TIMER1
   noInterrupts();
@@ -90,6 +109,10 @@ void setup() {
   TCCR1B |= (1 << CS11) | (1 << CS10);
 
   interrupts();
+#ifdef MY_KEEP_SERIAL
+  SerialUSB.write("...timer1 configured...\r\n");
+  SerialUSB.flush();
+#endif
 #endif
 
   // Initialize Button Pins
@@ -97,10 +120,8 @@ void setup() {
     pinMode(button.pin, INPUT_PULLUP);
   }
 #ifdef MY_KEEP_SERIAL
-  Serial.begin(9600);
-  while (!Serial) {
-    delayMicroseconds(125);
-  }
+  SerialUSB.write("...pull-ups configured, finished booting.\r\n");
+  SerialUSB.flush();
 #endif
 }
 
@@ -108,6 +129,8 @@ void setup() {
  Polling and sending
 **/
 void loop() {
+  static Joystick_ Joystick(0x03, 0x05, sizeof(MAPPED_PINS), 0, 0, 0, false);
+
   bool hasChanges = false;
 #ifdef TRACE_MEASURE
   auto time1 = micros();
@@ -130,9 +153,22 @@ void loop() {
   // measured about 32 µs for 4 buttons in earlier version
 #endif
   if (hasChanges) {
-    Joystick.sendState();
+    #ifdef TRACE_MEASURE
+    const auto usbHidSendState =
+    #endif
+      Joystick.sendState();
 #ifndef COMPLETELY_UNTOUCH_TIMER1
     OCR1A = 11;
+    #ifdef TRACE_MEASURE
+    if (usbHidSendState != -1) {
+      SerialUSB.write("--");
+      SerialUSB.print(usbHidSendState);
+      SerialUSB.println("--");
+    } else {
+      SerialUSB.println(_usbConfiguration ? "unknown error" : "_usbConfiguration uninitialized");
+    }
+    SerialUSB.flush();
+    #endif
   } else {
     OCR1A = 13;
 #endif
@@ -145,7 +181,7 @@ void loop() {
   time1 = micros() + (65536 - time1);
   // measured up to 600 µs (or even 640 µs?) in earlier version
   addStatPoint(time2, time1);
-  //if (0) {
+  if (0) {
 #endif
 
 #ifndef COMPLETELY_UNTOUCH_TIMER1
@@ -162,6 +198,6 @@ void loop() {
   
   //delayMicroseconds(hasChanges ? 350 : 800);
 #ifdef TRACE_MEASURE
-  //}
+  }
 #endif
 }
