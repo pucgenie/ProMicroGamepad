@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+DynamicHID.cpp
+DynamicHID.h
+Joystick.cpp
+Joystick.h
