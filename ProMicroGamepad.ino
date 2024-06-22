@@ -10,7 +10,7 @@
 #define SACRIFICE_CYCLES_FOR_RAM // saves about 12 bytes of RAM, adds 12 bytes of Program storage.
 //#define DEBUG_MY_TIMER1
 //#define COMPLETELY_UNTOUCH_TIMER1
-//#define MY_KEEP_SERIAL
+#define MY_KEEP_SERIAL
 //#define MY_DISABLE_POWERSAVE
 
 #define MY_DEBUG_USB
@@ -72,64 +72,82 @@ static struct MappedPin MAPPED_PINS[] = {
   }
 #endif
 
+static Joystick_ Joystick(sizeof(MAPPED_PINS));
+
 void setup() {
-  #if defined(MY_KEEP_SERIAL) || defined(MY_DEBUG_USB)
-    SerialUSB.begin(9600);
-	 const __FlashStringHelper* const BOOT_MESSAGE = F("ProMicroGamepad booting...\r\n");
-    while (!SerialUSB) {
-      delay(3);
-    }
-    SerialUSB.write(BOOT_MESSAGE);
-    SerialUSB.flush();
-  #endif
-  #ifdef DEBUG_MY_TIMER1
-    pinMode(LED_BUILTIN_TX, OUTPUT);
-  #endif
-  #ifndef MY_DISABLE_POWERSAVE
-    // try to reach <200 μA
-    power_spi_disable();
-    power_twi_disable();
-    ADCSRA = 0;
-    power_adc_disable();
-    #ifdef MY_KEEP_SERIAL
-      SerialUSB.write(F("...power consumption optimized...\r\n"));
-      SerialUSB.flush();
-    #endif
-  #endif
+	#if defined(MY_KEEP_SERIAL) || defined(MY_DEBUG_USB)
+		SerialUSB.begin(9600);
+		const __FlashStringHelper* const BOOT_MESSAGE = F("ProMicroGamepad booting...");
+		while (!SerialUSB) {
+			delay(3);
+		}
+		SerialUSB.print(BOOT_MESSAGE);
+		SerialUSB.flush();
+	#endif
+	#ifdef DEBUG_MY_TIMER1
+		pinMode(LED_BUILTIN_TX, OUTPUT);
+	#endif
+	#ifndef MY_DISABLE_POWERSAVE
+		// try to reach <200 μA
+		power_spi_disable();
+		power_twi_disable();
+		ADCSRA = 0;
+		power_adc_disable();
+		#ifdef MY_KEEP_SERIAL
+			SerialUSB.print(F(".power consumption optimized."));
+			SerialUSB.flush();
+		#endif
+	#endif
 
-  #ifndef COMPLETELY_UNTOUCH_TIMER1
-    noInterrupts();
-    // configure timer1 for waking up from standby
-    TCCR1A = 0x00;
-    TCCR1B = 0;
+	#ifndef COMPLETELY_UNTOUCH_TIMER1
+		noInterrupts();
+		// configure timer1 for waking up from standby
+		TCCR1A = 0x00;
+		TCCR1B = 0;
 
-    // CTC
-    TCCR1B |= (1 << WGM12);
-    // Prescaler 64 (^= 64 µs per tick)
-    TCCR1B |= (1 << CS11) | (1 << CS10);
+		// CTC
+		TCCR1B |= (1 << WGM12);
+		// Prescaler 64 (^= 64 µs per tick)
+		TCCR1B |= (1 << CS11) | (1 << CS10);
 
-    interrupts();
-    #ifdef MY_KEEP_SERIAL
-      SerialUSB.write(F("...timer1 configured...\r\n"));
-      SerialUSB.flush();
-    #endif
-  #endif
+		interrupts();
+		#ifdef MY_KEEP_SERIAL
+			SerialUSB.print(F("timer1 configured."));
+			SerialUSB.flush();
+		#endif
+	#endif
 
-  // Initialize Button Pins
-  for (auto &button : MAPPED_PINS) {
-    pinMode(button.pin, INPUT_PULLUP);
-  }
-  #ifdef MY_KEEP_SERIAL
-    SerialUSB.write(F("...pull-ups configured, finished booting.\r\n"));
-    SerialUSB.flush();
-  #endif
+	// Initialize Button Pins
+	for (auto &button : MAPPED_PINS) {
+		pinMode(button.pin, INPUT_PULLUP);
+	}
+	#ifdef MY_KEEP_SERIAL
+		SerialUSB.print(F("pull-ups configured."));
+		SerialUSB.flush();
+	#endif
+  
+	#ifdef MY_DEBUG_USB
+		if (!
+	#endif
+	Joystick.begin(0x03, 0x05)
+	#ifdef MY_DEBUG_USB
+		) {
+			SerialUSB.println(F("ERROR: Couldn't register HID device!"));
+		}
+		SerialUSB.flush();
+	#else
+		;
+	#endif
+	#ifdef MY_KEEP_SERIAL
+		SerialUSB.println(F("...finished booting."));
+		SerialUSB.flush();
+	#endif
 }
 
 /**
  Polling and sending
 **/
 void loop() {
-  static Joystick_ Joystick(0x03, 0x05, sizeof(MAPPED_PINS));
 
   bool hasChanges = false;
   #ifdef TRACE_MEASURE
