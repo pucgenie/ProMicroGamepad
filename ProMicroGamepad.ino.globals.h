@@ -6,12 +6,15 @@
 // or '#'.
 
  # is ignored because board library gets compiled without our headers
-#-DUSB_CONFIG_POWER=24
+-DUSB_CONFIG_POWER=25
  # USBCore_DISABLE_LEDS is a custom feature added to my board definition / libc source
 -DUSBCore_DISABLE_LEDS=1
 */
+// However, this doesn't work for Arduino's AVR toolchain.
 
 #ifndef JOYSTICKBUTTON_INO_GLOBALS_H
 #define JOYSTICKBUTTON_INO_GLOBALS_H
+
+#message Hello from JOYSTICKBUTTON_INO_GLOBALS_H
 
 #endif
