@@ -138,25 +138,32 @@ void setup() {
 	#else
 		;
 	#endif
-	#ifdef MY_DEBUG_USB
-	 	// TODO: Ensure our payload size stays below 142 bytes
-		// -1 becomes 255.
-      const auto usbHidSendState = (uint8_t)
-    #endif
 	// necessary to show up in device managers etc.
-	Joystick.sendState();
-	#ifdef MY_DEBUG_USB
-        if (usbHidSendState != 255) {
-          SerialUSB.write("--");
-          SerialUSB.print(usbHidSendState);
-          SerialUSB.println("--");
-        } else {
-          SerialUSB.println(F("--timeout or setup error--"));
-        }
-        SerialUSB.flush();
-      #endif
+	doJoystickSend();
 	#ifdef MY_KEEP_SERIAL
 		SerialUSB.println(F("...finished booting."));
+		SerialUSB.flush();
+	#endif
+}
+
+void doJoystickSend() {
+	auto usbHidSendState = Joystick.sendState();
+	#ifdef MY_DEBUG_USB
+		if (usbHidSendState != 0) {
+			if (usbHidSendState & 0b01000000) {
+				usbHidSendState ^= 0b01000000;
+				if (usbHidSendState == 0) {
+					SerialUSB.print(F("Got no USB_SendSpace before timeout!"));
+				} else {
+					SerialUSB.print(F("Missed too many timeslots: "));
+					SerialUSB.print(usbHidSendState ^ 0b01000000, 16);
+				}
+			} else {
+				SerialUSB.print(F("Unknown error code or just some retries: "));
+				SerialUSB.print(usbHidSendState, 16);
+			}
+			SerialUSB.println();
+		}
 		SerialUSB.flush();
 	#endif
 }
@@ -190,29 +197,12 @@ void loop() {
     // measured about 32 µs for 4 buttons in earlier version
   #endif
 	if (hasChanges) {
-		// TODO: Ensure our payload size stays below 142 bytes
-		// -1 becomes 255.
-		const auto usbHidSendState = Joystick.sendState();
+		doJoystickSend();
 		#ifndef COMPLETELY_UNTOUCH_TIMER1
 			OCR1A = 11;
-			#ifdef MY_DEBUG_USB
-			if (usbHidSendState != 0) {
-				if (usbHidSendState & 0b01000000) {
-					SerialUSB.print(F("Missed too many timeslots: "));
-					SerialUSB.print(usbHidSendState ^ 0b01000000, 16);
-				} else {
-					SerialUSB.print(F("Unknown error code: "));
-					SerialUSB.print(usbHidSendState, 16);
-				}
-				SerialUSB.println("--");
-			} else {
-				SerialUSB.println(F("--timeout or setup error--"));
-			}
-			SerialUSB.flush();
+		} else {
+			OCR1A = 13;
 		#endif
-	} else {
-		OCR1A = 13;
-	#endif
 	}
 // TODO: sync to USB: sleepMicroseconds(1000 - time it takes to read_interpret - time it takes to send USB packet)
 
