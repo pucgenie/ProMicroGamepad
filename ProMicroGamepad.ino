@@ -11,7 +11,7 @@
 //#define DEBUG_MY_TIMER1
 //#define COMPLETELY_UNTOUCH_TIMER1
 #define MY_KEEP_SERIAL
-//#define MY_DISABLE_POWERSAVE
+#define MY_DISABLE_POWERSAVE
 
 #define MY_DEBUG_USB
 
@@ -94,7 +94,7 @@ void setup() {
 		ADCSRA = 0;
 		power_adc_disable();
 		#ifdef MY_KEEP_SERIAL
-			SerialUSB.print(F(".power consumption optimized."));
+			SerialUSB.print(F("power consumption optimized."));
 			SerialUSB.flush();
 		#endif
 	#endif
@@ -138,6 +138,23 @@ void setup() {
 	#else
 		;
 	#endif
+	#ifdef MY_DEBUG_USB
+	 	// TODO: Ensure our payload size stays below 142 bytes
+		// -1 becomes 255.
+      const auto usbHidSendState = (uint8_t)
+    #endif
+	// necessary to show up in device managers etc.
+	Joystick.sendState();
+	#ifdef MY_DEBUG_USB
+        if (usbHidSendState != 255) {
+          SerialUSB.write("--");
+          SerialUSB.print(usbHidSendState);
+          SerialUSB.println("--");
+        } else {
+          SerialUSB.println(F("--timeout or setup error--"));
+        }
+        SerialUSB.flush();
+      #endif
 	#ifdef MY_KEEP_SERIAL
 		SerialUSB.println(F("...finished booting."));
 		SerialUSB.flush();
@@ -172,30 +189,32 @@ void loop() {
     time2 = micros() + (65536 - time1);
     // measured about 32 µs for 4 buttons in earlier version
   #endif
-  if (hasChanges) {
-    #ifdef MY_DEBUG_USB
-	 	// TODO: Ensure our payload size stays below 142 bytes
+	if (hasChanges) {
+		// TODO: Ensure our payload size stays below 142 bytes
 		// -1 becomes 255.
-      const auto usbHidSendState = (uint8_t)
-    #endif
-    Joystick.sendState();
-    #ifndef COMPLETELY_UNTOUCH_TIMER1
-      OCR1A = 11;
-      #ifdef MY_DEBUG_USB
-        if (usbHidSendState != 255) {
-          SerialUSB.write("--");
-          SerialUSB.print(usbHidSendState);
-          SerialUSB.println("--");
-        } else {
-          SerialUSB.println(F("--timeout or setup error--"));
-        }
-        SerialUSB.flush();
-      #endif
-    } else {
-      OCR1A = 13;
-    #endif
-    }
-  // TODO: sync to USB
+		const auto usbHidSendState = Joystick.sendState();
+		#ifndef COMPLETELY_UNTOUCH_TIMER1
+			OCR1A = 11;
+			#ifdef MY_DEBUG_USB
+			if (usbHidSendState != 0) {
+				if (usbHidSendState & 0b01000000) {
+					SerialUSB.print(F("Missed too many timeslots: "));
+					SerialUSB.print(usbHidSendState ^ 0b01000000, 16);
+				} else {
+					SerialUSB.print(F("Unknown error code: "));
+					SerialUSB.print(usbHidSendState, 16);
+				}
+				SerialUSB.println("--");
+			} else {
+				SerialUSB.println(F("--timeout or setup error--"));
+			}
+			SerialUSB.flush();
+		#endif
+	} else {
+		OCR1A = 13;
+	#endif
+	}
+// TODO: sync to USB: sleepMicroseconds(1000 - time it takes to read_interpret - time it takes to send USB packet)
 
   // MEASUREMENT: maximum 204 µs (single outliers at 1216 µs, wtf?) for block B: sending USB data
   // minimum 84 µs, maybe USB send takes 124 µs (sync error?)
