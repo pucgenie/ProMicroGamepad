@@ -35,26 +35,29 @@ void to_base16(const uint16_t value, void (*consumer)(uint8_t) ) {
   consumer(nibble_to_base16(value & 0x0F));
 }
 inline void addStatPoint(const uint16_t t1, const uint16_t t2) {
-#ifdef TRACE_MEASURE_SKIP_SMALL
-  if (t1 <= 0x48 && t2 <= 0x4C) {
+  #ifdef TRACE_MEASURE_SKIP_SMALL
+    if (t1 <= 0x48 && t2 <= 0x4C) {
 return;
-  }
-#endif
+    }
+  #endif
   {
     auto &tmpStats = stats1[stats1Idx];
     tmpStats.time1 = t1;
     tmpStats.time2 = t2;
   }
   if (++stats1Idx == 0) {
-#ifdef TRACE_MEASURE_PRINT_ALL
-#ifndef MY_KEEP_SERIAL
-    Serial.begin(9600);
-    while (!Serial) {
-      delayMicroseconds(125);
-    }
-#endif
-#endif
+    #if defined(TRACE_MEASURE_PRINT_ALL) && !defined(MY_KEEP_SERIAL)
+      Serial.begin(9600);
+      while (!Serial) {
+        delayMicroseconds(125);
+      }
+    #endif
     for (auto &tmpStats : stats1) {
+      if (tmpStats.time2 == max2.time2) {
+        ++max2Counter;
+        traceMeasurementMinMaxChanged = true;
+      }
+
       if (tmpStats.time1 < min1.time1) {
         min1 = tmpStats;
         traceMeasurementMinMaxChanged = true;
@@ -73,30 +76,24 @@ return;
         traceMeasurementMinMaxChanged = true;
       }
 
-      if (tmpStats.time2 == max2.time2) {
-        ++max2Counter;
-        traceMeasurementMinMaxChanged = true;
-      }
       #ifdef TRACE_MEASURE_PRINT_ALL
-      to_base16(tmpStats.time1, [](uint8_t character){Serial.write(character);});
-      Serial.write(',');
-      to_base16(tmpStats.time2, [](uint8_t character){Serial.write(character);});
-      Serial.write("\r\n");
+        to_base16(tmpStats.time1, [](uint8_t character){Serial.write(character);});
+        Serial.write(',');
+        to_base16(tmpStats.time2, [](uint8_t character){Serial.write(character);});
+        Serial.println();
       #endif
     }
     #ifdef TRACE_MEASURE_PRINT_ALL
-    Serial.write("\r\n");
+      Serial.println();
     #endif
 
     if (traceMeasurementMinMaxChanged) {
-#ifndef TRACE_MEASURE_PRINT_ALL
-#ifndef MY_KEEP_SERIAL
-      Serial.begin(9600);
-      while (!Serial) {
-        delayMicroseconds(125);
-      }
-#endif
-#endif
+      #if !(defined(TRACE_MEASURE_PRINT_ALL) || defined(MY_KEEP_SERIAL)) 
+        Serial.begin(9600);
+        while (!Serial) {
+          delay(3);
+        }
+      #endif
       to_base16(min1.time1, [](uint8_t character){Serial.write(character);});
       Serial.write('\t');
       to_base16(min2.time2, [](uint8_t character){Serial.write(character);});
@@ -112,9 +109,9 @@ return;
 
     if (Serial) {
       Serial.flush();
-#ifndef MY_KEEP_SERIAL
-      Serial.end();
-#endif
+      #ifndef MY_KEEP_SERIAL
+        Serial.end();
+      #endif
     }
   }
 }

@@ -1,29 +1,27 @@
 // Joystick library and code skeleton by Matthew Heironimus (2015)
 //--------------------------------------------------------------------
 
-//#define TRACE_MEASURE
-// no TRACE_MEASURE_PRINT_ALL
-// no TRACE_MEASURE_SKIP_SMALL
-#define SACRIFICE_CYCLES_FOR_RAM // saves about 12 bytes of RAM, 14 bytes of Program storage.
+//-DJoystick_DISABLE_AUTOSEND
+//-DUSBCore_DISABLE_LEDS
+
+#define TRACE_MEASURE
+//#define TRACE_MEASURE_PRINT_ALL
+//#define TRACE_MEASURE_SKIP_SMALL
+#define SACRIFICE_CYCLES_FOR_RAM // saves about 12 bytes of RAM, adds 12 bytes of Program storage.
 //#define DEBUG_MY_TIMER1
 //#define COMPLETELY_UNTOUCH_TIMER1
 //#define MY_KEEP_SERIAL
 //#define MY_DISABLE_POWERSAVE
+
 #define MY_DEBUG_USB
 
-// workaround, include here to prevent implicit includes (running wrong marcos)
-//#include <Arduino.h>
+
+#include <Arduino.h>
 //#include <USBCore.h>
 
 #include "Joystick.h"
 #include <avr/power.h>
 #include <avr/sleep.h>
-
-#ifdef MY_DEBUG_USB
-  // debugging send state code -1
-  #include <USBCore.h>
-  extern volatile u8 _usbConfiguration;
-#endif
 
 struct MappedPin {
   // pins 2 to 16: need 4 bits when using offset -2
@@ -77,10 +75,11 @@ static struct MappedPin MAPPED_PINS[] = {
 void setup() {
   #if defined(MY_KEEP_SERIAL) || defined(MY_DEBUG_USB)
     SerialUSB.begin(9600);
+	 const __FlashStringHelper* const BOOT_MESSAGE = F("ProMicroGamepad booting...\r\n");
     while (!SerialUSB) {
       delay(3);
     }
-    SerialUSB.write("ProMicroGamepad booting...\r\n");
+    SerialUSB.write(BOOT_MESSAGE);
     SerialUSB.flush();
   #endif
   #ifdef DEBUG_MY_TIMER1
@@ -93,7 +92,7 @@ void setup() {
     ADCSRA = 0;
     power_adc_disable();
     #ifdef MY_KEEP_SERIAL
-      SerialUSB.write("...power consumption optimized...\r\n");
+      SerialUSB.write(F("...power consumption optimized...\r\n"));
       SerialUSB.flush();
     #endif
   #endif
@@ -111,7 +110,7 @@ void setup() {
 
     interrupts();
     #ifdef MY_KEEP_SERIAL
-      SerialUSB.write("...timer1 configured...\r\n");
+      SerialUSB.write(F("...timer1 configured...\r\n"));
       SerialUSB.flush();
     #endif
   #endif
@@ -121,7 +120,7 @@ void setup() {
     pinMode(button.pin, INPUT_PULLUP);
   }
   #ifdef MY_KEEP_SERIAL
-    SerialUSB.write("...pull-ups configured, finished booting.\r\n");
+    SerialUSB.write(F("...pull-ups configured, finished booting.\r\n"));
     SerialUSB.flush();
   #endif
 }
@@ -130,7 +129,7 @@ void setup() {
  Polling and sending
 **/
 void loop() {
-  static Joystick_ Joystick(0x03, 0x05, sizeof(MAPPED_PINS), 0, 0, 0, false);
+  static Joystick_ Joystick(0x03, 0x05, sizeof(MAPPED_PINS));
 
   bool hasChanges = false;
   #ifdef TRACE_MEASURE
@@ -157,18 +156,20 @@ void loop() {
   #endif
   if (hasChanges) {
     #ifdef MY_DEBUG_USB
-      const auto usbHidSendState =
+	 	// TODO: Ensure our payload size stays below 142 bytes
+		// -1 becomes 255.
+      const auto usbHidSendState = (uint8_t)
     #endif
     Joystick.sendState();
     #ifndef COMPLETELY_UNTOUCH_TIMER1
       OCR1A = 11;
       #ifdef MY_DEBUG_USB
-        if (usbHidSendState != -1) {
+        if (usbHidSendState != 255) {
           SerialUSB.write("--");
           SerialUSB.print(usbHidSendState);
           SerialUSB.println("--");
         } else {
-          SerialUSB.println(_usbConfiguration ? "--timeout--" : "--_usbConfiguration uninitialized--");
+          SerialUSB.println(F("--timeout or setup error--"));
         }
         SerialUSB.flush();
       #endif
