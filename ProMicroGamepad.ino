@@ -11,7 +11,7 @@
 //#define DEBUG_MY_TIMER1
 //#define COMPLETELY_UNTOUCH_TIMER1
 #define MY_KEEP_SERIAL
-#define MY_DISABLE_POWERSAVE
+//#define MY_DISABLE_POWERSAVE
 
 #define MY_DEBUG_USB
 
@@ -125,29 +125,23 @@ void setup() {
 		SerialUSB.print(F("pull-ups configured."));
 		SerialUSB.flush();
 	#endif
-  
-	#ifdef MY_DEBUG_USB
-		if (!
-	#endif
-	Joystick.begin(0x03, 0x05)
-	#ifdef MY_DEBUG_USB
-		) {
+
+	if (!Joystick.begin(0x03, 0x05)) {
+		#ifdef MY_DEBUG_USB
 			SerialUSB.println(F("ERROR: Couldn't register HID device!"));
-		}
-		SerialUSB.flush();
-	#else
-		;
-	#endif
+			SerialUSB.flush();
+		#endif
+	}
 	// necessary to show up in device managers etc.
-	doJoystickSend();
+	doJoystickSend(25);
 	#ifdef MY_KEEP_SERIAL
 		SerialUSB.println(F("...finished booting."));
 		SerialUSB.flush();
 	#endif
 }
 
-void doJoystickSend() {
-	auto usbHidSendState = Joystick.sendState();
+void doJoystickSend(u8 timeout) {
+	auto usbHidSendState = Joystick.sendState(timeout);
 	#ifdef MY_DEBUG_USB
 		if (usbHidSendState != 0) {
 			if (usbHidSendState & 0b01000000) {
@@ -197,7 +191,7 @@ void loop() {
     // measured about 32 µs for 4 buttons in earlier version
   #endif
 	if (hasChanges) {
-		doJoystickSend();
+		doJoystickSend(9);
 		#ifndef COMPLETELY_UNTOUCH_TIMER1
 			OCR1A = 11;
 		} else {
