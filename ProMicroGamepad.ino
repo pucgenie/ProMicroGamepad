@@ -4,16 +4,16 @@
 //-DJoystick_DISABLE_AUTOSEND
 //-DUSBCore_DISABLE_LEDS
 
-#define TRACE_MEASURE
+//#define TRACE_MEASURE
 //#define TRACE_MEASURE_PRINT_ALL
 //#define TRACE_MEASURE_SKIP_SMALL
 #define SACRIFICE_CYCLES_FOR_RAM // saves about 12 bytes of RAM, adds 12 bytes of Program storage.
 //#define DEBUG_MY_TIMER1
-//#define COMPLETELY_UNTOUCH_TIMER1
-#define MY_KEEP_SERIAL
+#define COMPLETELY_UNTOUCH_TIMER1
+//#define MY_KEEP_SERIAL
 //#define MY_DISABLE_POWERSAVE
 
-#define MY_DEBUG_USB
+//#define MY_DEBUG_USB
 
 
 #include <Arduino.h>
@@ -77,11 +77,23 @@ static Joystick_ Joystick(sizeof(MAPPED_PINS));
 void setup() {
 	#if defined(MY_KEEP_SERIAL) || defined(MY_DEBUG_USB)
 		SerialUSB.begin(9600);
+		// optimization: Use USB init wait time for reading from Flash
 		const __FlashStringHelper* const BOOT_MESSAGE = F("ProMicroGamepad booting...");
+		#ifdef MY_DEBUG_USB
+			uint_fast8_t waitLoopCount = 0;
+		#endif
 		while (!SerialUSB) {
-			delay(3);
+			delay(1);
+			#ifdef MY_DEBUG_USB
+				++waitLoopCount;
+			#endif
 		}
 		SerialUSB.print(BOOT_MESSAGE);
+		#ifdef MY_DEBUG_USB
+			SerialUSB.print(F("after waiting for "));
+			SerialUSB.print(waitLoopCount);
+			SerialUSB.print("ms ...");
+		#endif
 		SerialUSB.flush();
 	#endif
 	#ifdef DEBUG_MY_TIMER1
